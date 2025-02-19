@@ -1,7 +1,7 @@
 bluetooth.startUartService()
 
 bluetooth.onBluetoothConnected(function () {
-    basic.showIcon(IconNames.Happy)
+    basic.showIcon(IconNames.House)
 })
 
 let commandValue = 0
@@ -10,9 +10,26 @@ let commadParts: string[] = []
 let command = ""
 let running = false;
 let maxTime = 1;
-let minDistance = 10;
-let maxDistance = 0;
 let samplingTime = 20;
+music.setVolume(50)
+
+function start() {
+    if (!running) {
+        running = true
+        basic.showIcon(IconNames.Target)
+
+        bluetooth.uartWriteString(['maxTime', maxTime, '\n'].join(','))
+        bluetooth.uartWriteString(['samplingTime', samplingTime,'\n'].join(','))
+
+        if (!silent) {
+            music.play(music.tonePlayable(Note.C, music.beat(BeatFraction.Whole)), music.PlaybackMode.UntilDone)
+        }
+    }
+}
+
+input.onButtonPressed(Button.B, function() {
+    start()
+})
 
 bluetooth.onUartDataReceived(serial.delimiters(Delimiters.NewLine), function () {
     command = bluetooth.uartReadUntil(serial.delimiters(Delimiters.NewLine))
@@ -25,9 +42,7 @@ bluetooth.onUartDataReceived(serial.delimiters(Delimiters.NewLine), function () 
     }
 
     if (commandName == "a" || commandName == "start") {
-        running = true
-        basic.showIcon(IconNames.Triangle)
-        bluetooth.uartWriteString('clearData' + '\n')
+        start()
     }
     
     if (commandName == "maxTime") {
@@ -35,48 +50,66 @@ bluetooth.onUartDataReceived(serial.delimiters(Delimiters.NewLine), function () 
         bluetooth.uartWriteString(maxTime + '\n')
     }
 
-    if (commandName == "minDistance") {
-        minDistance = commandValue
-        bluetooth.uartWriteString(minDistance + '\n')
-    }
-
-    if (commandName == "maxDistance") {
-        maxDistance = commandValue
-        bluetooth.uartWriteString(maxDistance + '\n')
+    if (commandName == "samplingTime") {
+        samplingTime = commandValue
+        bluetooth.uartWriteString(samplingTime + '\n')
     }
 
 })
 
 let data: string[] = []
 let startTime = 0;
+let trigger = false;
+let silent = false;
 
 function getTime() {
-    return input.runningTime()/1000
+    return input.runningTime()
 }
 
 basic.forever(function () {
-    let distance = sonar.ping(DigitalPin.P1, DigitalPin.P2, PingUnit.Centimeters)
-    if (running && distance > minDistance) { //  && distance > 10
-        startTime = getTime()
-        let time = startTime;
-        let dTime = 0;
-        let distance = 0;
+    let distance = sonar.ping(DigitalPin.P1, DigitalPin.P2, PingUnit.Centimeters) / 100
 
-        while (dTime <= maxTime && (!maxDistance || distance < maxDistance)) {
-            distance = sonar.ping(DigitalPin.P1, DigitalPin.P2, PingUnit.Centimeters)
-            time = getTime()
-            dTime = time - startTime
-            data.push([time, dTime, distance, (dTime**2)/2].join(','))
-            basic.pause(samplingTime)
+    if (distance > 0 && distance < 7) {
+        if (running && !trigger && distance < 0.10) {
+            trigger = true;
+            if (!silent) {
+                music.play(music.tonePlayable(Note.A, music.beat(BeatFraction.Whole)), music.PlaybackMode.UntilDone)
+            }
         }
 
-        for (let row of data) {
-            bluetooth.uartWriteString(row + '\n')
-            basic.pause(20)
-        }
+        if (running && trigger) {
+            bluetooth.uartWriteString('clearData' + '\n')
 
-        data = []
-        running = false
-        basic.showIcon(IconNames.Yes)
+            startTime = input.runningTime()
+            let time = startTime;
+            let fallTime = 0;
+            let distance = 0;
+
+            while (fallTime <= maxTime) {
+                distance = sonar.ping(DigitalPin.P1, DigitalPin.P2, PingUnit.Centimeters) / 100
+                time = input.runningTime()
+                fallTime = (time - startTime) / 1000
+
+                if (distance > 0 && distance < 7) {
+                    data.push([time, fallTime, Math.pow(fallTime, 2) / 2, distance].join(','))
+                    basic.pause(samplingTime)
+                } else {
+                    basic.pause(20)
+                }
+            }
+
+            for (let row of data) {
+                bluetooth.uartWriteString(row + '\n')
+                basic.pause(20)
+            }
+
+            data = []
+            running = false
+            basic.showIcon(IconNames.Yes)
+        }
     }
+
+
+
+
 })

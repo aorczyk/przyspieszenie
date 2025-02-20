@@ -10,13 +10,15 @@ let commadParts: string[] = []
 let command = ""
 let running = false;
 let maxTime = 1;
-let samplingTime = 20;
+let samplingTime = 50;
+let measure = false;
+
 music.setVolume(50)
 
 function start() {
     if (!running) {
         running = true
-        basic.showIcon(IconNames.Target)
+        basic.showArrow(ArrowNames.South)
 
         bluetooth.uartWriteString(['maxTime', maxTime, '\n'].join(','))
         bluetooth.uartWriteString(['samplingTime', samplingTime,'\n'].join(','))
@@ -55,6 +57,10 @@ bluetooth.onUartDataReceived(serial.delimiters(Delimiters.NewLine), function () 
         bluetooth.uartWriteString(samplingTime + '\n')
     }
 
+    if (commandName == "measure" || commandName == "m") {
+        measure = !measure
+        bluetooth.uartWriteString(measure + '\n')
+    }
 })
 
 let data: string[] = []
@@ -105,11 +111,15 @@ basic.forever(function () {
 
             data = []
             running = false
+            trigger = false
             basic.showIcon(IconNames.Yes)
         }
     }
 
-
-
-
+    if (measure) {
+        bluetooth.uartWriteString([input.runningTime(), distance].join(',') + '\n')
+        basic.pause(samplingTime)
+    } else {
+        basic.pause(500)
+    }
 })

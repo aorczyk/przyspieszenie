@@ -12,6 +12,10 @@ let running = false;
 let maxTime = 1;
 let samplingTime = 50;
 let measure = false;
+let data: string[] = []
+let startTime = 0;
+let trigger = false;
+let silent = false;
 
 music.setVolume(50)
 
@@ -32,6 +36,10 @@ function start() {
 input.onButtonPressed(Button.B, function() {
     start()
 })
+
+function send(text: String) {
+    bluetooth.uartWriteString(text + '\n')
+}
 
 bluetooth.onUartDataReceived(serial.delimiters(Delimiters.NewLine), function () {
     command = bluetooth.uartReadUntil(serial.delimiters(Delimiters.NewLine))
@@ -59,32 +67,43 @@ bluetooth.onUartDataReceived(serial.delimiters(Delimiters.NewLine), function () 
 
     if (commandName == "measure" || commandName == "m") {
         measure = !measure
-        bluetooth.uartWriteString(measure + '\n')
+
+        if (!silent) {
+            music.play(music.tonePlayable(Note.C, music.beat(BeatFraction.Whole)), music.PlaybackMode.UntilDone)
+        }
+    }
+
+    if (commandName == "trigger" || commandName == "t") {
+        start()
+        basic.pause(500)
+        trigger = true
+    }
+
+    if (commandName == "silent" || commandName == "s") {
+        silent = !silent
+        bluetooth.uartWriteString(silent + '\n')
     }
 })
 
-let data: string[] = []
-let startTime = 0;
-let trigger = false;
-let silent = false;
+
 
 function getTime() {
     return input.runningTime()
 }
 
 basic.forever(function () {
-    let distance = sonar.ping(DigitalPin.P1, DigitalPin.P2, PingUnit.Centimeters) / 100
+    let distance = sonar.ping(DigitalPin.P0, DigitalPin.P1, PingUnit.Centimeters) / 100
 
     if (distance > 0 && distance < 7) {
         if (running && !trigger && distance < 0.10) {
             trigger = true;
-            if (!silent) {
-                music.play(music.tonePlayable(Note.A, music.beat(BeatFraction.Whole)), music.PlaybackMode.UntilDone)
-            }
         }
 
         if (running && trigger) {
             bluetooth.uartWriteString('clearData' + '\n')
+            if (!silent) {
+                music.play(music.tonePlayable(Note.A, music.beat(BeatFraction.Whole)), music.PlaybackMode.UntilDone)
+            }
 
             startTime = input.runningTime()
             let time = startTime;
@@ -97,12 +116,23 @@ basic.forever(function () {
                 fallTime = (time - startTime) / 1000
 
                 if (distance > 0 && distance < 7) {
-                    data.push([time, fallTime, Math.pow(fallTime, 2) / 2, distance].join(','))
+                    data.push([
+                        time, 
+                        fallTime, 
+                        Math.pow(fallTime, 2), 
+                        distance
+                    ].join(','))
                     basic.pause(samplingTime)
                 } else {
                     basic.pause(20)
                 }
             }
+
+            if (!silent) {
+                music.play(music.tonePlayable(Note.A, music.beat(BeatFraction.Whole)), music.PlaybackMode.UntilDone)
+            }
+
+            basic.showIcon(IconNames.Yes)
 
             for (let row of data) {
                 bluetooth.uartWriteString(row + '\n')
@@ -112,12 +142,14 @@ basic.forever(function () {
             data = []
             running = false
             trigger = false
-            basic.showIcon(IconNames.Yes)
+        }
+
+        if (measure) {
+            bluetooth.uartWriteString([input.runningTime(), distance].join(',') + '\n')
         }
     }
 
     if (measure) {
-        bluetooth.uartWriteString([input.runningTime(), distance].join(',') + '\n')
         basic.pause(samplingTime)
     } else {
         basic.pause(500)

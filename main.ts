@@ -33,8 +33,13 @@ function start() {
     }
 }
 
-input.onButtonPressed(Button.B, function() {
+input.onButtonPressed(Button.A, function () {
     start()
+})
+
+input.onButtonPressed(Button.B, function() {
+    running = false
+    basic.clearScreen()
 })
 
 function send(text: String) {

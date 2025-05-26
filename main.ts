@@ -97,7 +97,7 @@ function getTime() {
 }
 
 basic.forever(function () {
-    let distance = sonar.ping(DigitalPin.P0, DigitalPin.P1, PingUnit.Centimeters) / 100
+    let distance = sonar.ping(DigitalPin.P1, DigitalPin.P2, PingUnit.Centimeters) / 100
 
     if (distance > 0 && distance < 7) {
         if (running && !trigger && distance < 0.10) {
